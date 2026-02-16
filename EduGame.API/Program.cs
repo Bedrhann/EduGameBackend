@@ -1,5 +1,7 @@
 using EduGame.Data;
 using Microsoft.EntityFrameworkCore;
+using EduGame.Service.Abstracts;
+using EduGame.Service.Concretes;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,6 +13,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString));
 
 // 2. Controller ve Swagger Servisleri
+builder.Services.AddScoped<IGameContentService, GameContentManager>();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
