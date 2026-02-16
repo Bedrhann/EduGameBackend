@@ -1,5 +1,5 @@
-using EduGame.Core.Entities;
 using EduGame.Service.Abstracts;
+using EduGame.Service.DTOs; // DTO'yu eklemeyi unutma
 using Microsoft.AspNetCore.Mvc;
 
 namespace EduGame.API.Controllers;
@@ -16,12 +16,15 @@ public class GameContentController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<IActionResult> Create(GameContent content)
+    public async Task<IActionResult> Create(CreateGameContentDto dto) // Artık DTO alıyor
     {
-        var result = await _gameContentService.CreateAsync(content);
+        var result = await _gameContentService.CreateAsync(dto);
         return Ok(result);
     }
-
+    
+    // ... Diğer metodlar (GetById, Process, Approve) aynı kalabilir
+    // çünkü onlar sadece ID alıyor.
+    
     [HttpGet("{id}")]
     public async Task<IActionResult> GetById(int id)
     {
@@ -40,6 +43,6 @@ public class GameContentController : ControllerBase
     public async Task<IActionResult> Approve(int id)
     {
         var success = await _gameContentService.ApproveContentAsync(id);
-        return success ? Ok() : BadRequest("Onaylanamadı usta!");
+        return success ? Ok() : BadRequest("Onaylanamadı.");
     }
 }

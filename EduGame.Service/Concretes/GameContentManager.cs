@@ -1,6 +1,7 @@
 using EduGame.Core.Entities;
 using EduGame.Data;
 using EduGame.Service.Abstracts;
+using EduGame.Service.DTOs;
 using Microsoft.EntityFrameworkCore;
 
 namespace EduGame.Service.Concretes;
@@ -8,75 +9,80 @@ namespace EduGame.Service.Concretes;
 public class GameContentManager : IGameContentService
 {
     private readonly AppDbContext _context;
-    private readonly IAIService _aiService; // Yapay Zeka Servisimiz
+    private readonly IAIService _aiService;
 
-    // Constructor (Dependency Injection)
     public GameContentManager(AppDbContext context, IAIService aiService)
     {
         _context = context;
         _aiService = aiService;
     }
 
-    // 1. Yeni İçerik Oluşturma
-    public async Task<GameContent> CreateAsync(GameContent content)
+    public async Task<GameContentDto> CreateAsync(CreateGameContentDto dto)
     {
-        content.Status = ContentStatus.Draft;
-        content.CreatedDate = DateTime.UtcNow;
-        
-        await _context.GameContents.AddAsync(content);
+        // 1. DTO -> Entity Dönüşümü (Mapping)
+        var entity = new GameContent
+        {
+            Title = dto.Title,
+            SourceType = dto.SourceType,
+            RawText = dto.RawText,
+            TargetLanguage = dto.TargetLanguage,
+            UserId = dto.UserId,
+            Status = ContentStatus.Draft,
+            CreatedDate = DateTime.UtcNow
+        };
+
+        // 2. Veritabanına Kayıt
+        await _context.GameContents.AddAsync(entity);
         await _context.SaveChangesAsync();
-        
-        return content;
+
+        // 3. Entity -> DTO Dönüşümü ve Return
+        return MapToDto(entity);
     }
 
-    // 2. İçeriği İşle ve Özetle (En Kritik Yer)
+    public async Task<GameContentDto> GetByIdAsync(int id)
+    {
+        var entity = await _context.GameContents
+            .Include(x => x.Questions)
+            .FirstOrDefaultAsync(x => x.Id == id)
+            ?? throw new Exception("İçerik bulunamadı.");
+
+        return MapToDto(entity);
+    }
+
     public async Task<string> ProcessAndSummarizeAsync(int contentId)
     {
         var content = await _context.GameContents.FindAsync(contentId);
-        if (content == null) throw new Exception("İçerik bulunamadı usta!");
+        if (content == null) throw new Exception("İçerik bulunamadı.");
 
-        // Durumu güncelle: İşleniyor
         content.Status = ContentStatus.Processing;
         await _context.SaveChangesAsync();
 
         try
         {
-            // Eğer metin yoksa AI'ya boşuna gitmeyelim
             if (string.IsNullOrEmpty(content.RawText))
-            {
-                throw new Exception("İşlenecek ham metin (RawText) boş!");
-            }
+                throw new Exception("RawText boş!");
 
-            // --- AI DEVREYE GİRİYOR ---
             var summary = await _aiService.GenerateSummaryAsync(content.RawText);
-            
-            // Sonuçları kaydet
+
             content.ApprovedSummary = summary;
-            content.Status = ContentStatus.WaitingApproval; // Onay bekliyor
+            content.Status = ContentStatus.WaitingApproval;
             content.UpdatedDate = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
             return summary;
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            // Hata olursa durumu geri al veya logla
-            content.Status = ContentStatus.Draft; // Tekrar taslağa çekiyoruz ki düzeltilebilsin
+            content.Status = ContentStatus.Draft;
             await _context.SaveChangesAsync();
-            
-            // Hatayı yukarı fırlat, Controller yakalasın
-            throw new Exception($"AI İşlemi sırasında hata: {ex.Message}");
+            throw;
         }
     }
 
-    // 3. Kullanıcı Onayı
     public async Task<bool> ApproveContentAsync(int contentId)
     {
         var content = await _context.GameContents.FindAsync(contentId);
-        if (content == null) return false;
-
-        // Sadece özeti çıkmış içerikler onaylanabilir
-        if (string.IsNullOrEmpty(content.ApprovedSummary)) return false;
+        if (content == null || string.IsNullOrEmpty(content.ApprovedSummary)) return false;
 
         content.Status = ContentStatus.Approved;
         content.UpdatedDate = DateTime.UtcNow;
@@ -85,12 +91,21 @@ public class GameContentManager : IGameContentService
         return true;
     }
 
-    // 4. ID'ye Göre Getir
-    public async Task<GameContent> GetByIdAsync(int id)
+    // Yardımcı Mapper Metodu
+    private static GameContentDto MapToDto(GameContent entity)
     {
-        return await _context.GameContents
-            .Include(x => x.Questions) // Soruları da getir
-            .FirstOrDefaultAsync(x => x.Id == id) 
-            ?? throw new Exception("İçerik bulunamadı.");
+        return new GameContentDto
+        {
+            Id = entity.Id,
+            Title = entity.Title,
+            SourceType = entity.SourceType,
+            Status = entity.Status,
+            RawText = entity.RawText,
+            ApprovedSummary = entity.ApprovedSummary,
+            TargetLanguage = entity.TargetLanguage,
+            UserId = entity.UserId,
+            CreatedDate = entity.CreatedDate,
+            UpdatedDate = entity.UpdatedDate
+        };
     }
 }

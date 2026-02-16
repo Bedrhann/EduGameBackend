@@ -1,26 +1,35 @@
 using EduGame.Data;
-using Microsoft.EntityFrameworkCore;
 using EduGame.Service.Abstracts;
 using EduGame.Service.Concretes;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. Veritabanı Servisini Ekle
-// appsettings.json dosyasından "DefaultConnection" kısmını okur.
+// 1. Veritabanı Bağlantısı
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString));
 
-// 2. Controller ve Swagger Servisleri
+// 2. Servis Kayıtları (Dependency Injection)
+
+// >>> EKSİK OLAN KISIM BURASI <<<
+// GeminiAIService, HttpClient kullandığı için bu şekilde ekliyoruz:
+builder.Services.AddHttpClient<IAIService, GeminiAIService>();
+
+// GameContentManager servisi:
 builder.Services.AddScoped<IGameContentService, GameContentManager>();
+
+// UserManager servisi:
+builder.Services.AddScoped<IUserService, UserManager>();
+
+// 3. Controller ve Swagger
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// 3. Middleware (İstek Hattı)
+// ... Geri kalan kısım aynı ...
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -28,9 +37,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
 app.UseAuthorization();
-
 app.MapControllers();
 
 app.Run();
