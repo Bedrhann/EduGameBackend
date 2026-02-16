@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  # 1. Veritabanı Servisi (PostgreSQL)
+  db:
+    image: postgres:15-alpine
+    container_name: edugame_db
+    restart: always
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: Password123! # Prod'da bunu .env dosyasından çekeceğiz
+      POSTGRES_DB: EduGameDb
+    ports:
+      - "5432:5432" # Dışarıdan DB'ye erişmek istersen (Geliştirme için)
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - edugame_net
+
+  # 2. Backend API Servisi
+  api:
+    build:
+      context: .
+      dockerfile: EduGame.API/Dockerfile
+    container_name: edugame_api
+    restart: on-failure
+    depends_on:
+      - db
+    ports:
+      - "5000:8080" # Localhost:5000 -> Container:8080
+    environment:
+      - ConnectionStrings__DefaultConnection=Host=db;Database=EduGameDb;Username=admin;Password=Password123!
+      - ASPNETCORE_ENVIRONMENT=Development
+    networks:
+      - edugame_net
+
+volumes:
+  pgdata:
+
+networks:
+  edugame_net:
+    driver: bridge
